@@ -1,0 +1,13 @@
+services:
+  zeek-lab:
+    build: .
+    container_name: zeek-capitalone-lab
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - ./logs:/demo/logs
+    ports:
+      - "8080:8080"
+    stdin_open: true
+    tty: true
+    command: /demo/run_simulation.sh

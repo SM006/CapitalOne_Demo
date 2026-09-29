@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Incident SEC-2019-CAPONE — Security Operations</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Top Navigation / Header -->
+    <header class="header">
+        <div class="header-watermark" aria-hidden="true">SEC-2019-CAPONE</div>
+        <div class="header-inner">
+            <div class="header-main">
+                <h1 class="page-title">Capital One Breach Investigation</h1>
+                <p class="page-subtitle">Zeek network security monitoring and CloudTrail canarytoken detection</p>
+            </div>
+            <div class="header-meta">
+                <span class="meta-item">Case SEC-2019-CAPONE</span>
+                <span class="meta-separator">·</span>
+                <span class="meta-item severity">
+                    <span class="severity-dot" aria-hidden="true"></span>
+                    Critical severity
+                </span>
+                <span class="meta-separator">·</span>
+                <span class="meta-item">Zeek online (lo0)</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Key Metrics Strip -->
+        <section class="section metrics-strip">
+            <div class="stat-col">
+                <span class="stat-num">0.01s</span>
+                <span class="stat-caption">Mean time to detect</span>
+            </div>
+            <div class="stat-col">
+                <span class="stat-num">108d</span>
+                <span class="stat-caption">Historical 2019 dwell time</span>
+            </div>
+            <div class="stat-col">
+                <span class="stat-num">106M</span>
+                <span class="stat-caption">Target customer records</span>
+            </div>
+            <div class="stat-col">
+                <span class="stat-num">2</span>
+                <span class="stat-caption">Independent detection points</span>
+            </div>
+            <div class="stat-col">
+                <span class="stat-num">0%</span>
+                <span class="stat-caption">Canary false positive rate</span>
+            </div>
+        </section>
+
+        <div class="hairline"></div>
+
+        <!-- Section 1: Attack Path Topology -->
+        <section class="section">
+            <div class="section-heading">
+                <div class="section-title-wrap">
+                    <span class="section-label">SEC-01</span>
+                    <h2 class="section-title">Attack execution and interception path</h2>
+                </div>
+                <div class="mitre-line">MITRE T1190 · MITRE T1552.005 · MITRE T1530</div>
+            </div>
+
+            <!-- Animated Timeline Track -->
+            <div class="timeline-container">
+                <div class="timeline-track" aria-hidden="true">
+                    <div class="timeline-line"></div>
+                    <div class="timeline-pulse"></div>
+                </div>
+
+                <div class="timeline-steps">
+                    <div class="step-col">
+                        <span class="step-num">Step 1</span>
+                        <h3 class="step-title">Ingress probe</h3>
+                        <p class="step-text">External attacker crafts unvalidated URL query through reverse proxy.</p>
+                        <div class="step-data mono">127.0.0.1:44626</div>
+                    </div>
+
+                    <div class="step-col">
+                        <span class="step-num">Step 2</span>
+                        <h3 class="step-title">Vulnerable WAF</h3>
+                        <p class="step-text">ModSecurity proxy performs server-side fetch without link-local restrictions.</p>
+                        <div class="step-data mono">0.0.0.0:8080</div>
+                    </div>
+
+                    <div class="step-col is-active">
+                        <span class="step-num">Step 3 · Intercepted</span>
+                        <h3 class="step-title">AWS metadata (IMDSv1)</h3>
+                        <p class="step-text">Target instance metadata queried for temporary IAM credentials. Zeek notice fires.</p>
+                        <div class="step-data mono">169.254.169.254:80</div>
+                    </div>
+
+                    <div class="step-col">
+                        <span class="step-num">Step 4</span>
+                        <h3 class="step-title">S3 storage sync</h3>
+                        <p class="step-text">Stolen credentials utilized to sync customer records across 700+ buckets.</p>
+                        <div class="step-data mono">s3://capitalone-card-app</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sensor Interceptors (Two Columns separated by hairline) -->
+            <div class="interceptors-two-col">
+                <div class="interceptor-col">
+                    <h3 class="interceptor-title">Zeek passive network monitor</h3>
+                    <p class="interceptor-desc">Passively monitors packet stream across loopback or VPC interfaces. Evaluates destination address against link-local metadata prefix and generates structured notice alarms at wire speed.</p>
+                    <div class="interceptor-meta">
+                        <div><span class="k">Interface</span> <span class="v mono">lo0 / lo</span></div>
+                        <div><span class="k">Event</span> <span class="v mono">http_request</span></div>
+                        <div><span class="k">Latency</span> <span class="v mono">&lt; 0.01s</span></div>
+                    </div>
+                </div>
+
+                <div class="col-divider" aria-hidden="true"></div>
+
+                <div class="interceptor-col">
+                    <h3 class="interceptor-title">Thinkst Canarytokens honeykeys</h3>
+                    <p class="interceptor-desc">Monitored AWS STS credentials placed quietly in standard configuration directories. When an adversary attempts identity verification via AWS CLI, CloudTrail triggers an instant notification.</p>
+                    <div class="interceptor-meta">
+                        <div><span class="k">Account</span> <span class="v mono">251213420461</span></div>
+                        <div><span class="k">Hook</span> <span class="v mono">sts:GetCallerIdentity</span></div>
+                        <div><span class="k">Latency</span> <span class="v mono">15–30s</span></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="hairline"></div>
+
+        <!-- Section 2: Log Viewer & Correlation -->
+        <section class="section">
+            <div class="section-heading">
+                <div class="section-title-wrap">
+                    <span class="section-label">SEC-02</span>
+                    <h2 class="section-title">Telemetry and unified session correlation</h2>
+                </div>
+
+                <div class="log-controls">
+                    <div class="search-wrap">
+                        <input type="text" id="log-search-input" placeholder="Filter by IP, UID, or URI..." spellcheck="false" autocomplete="off">
+                    </div>
+
+                    <!-- iOS Segmented Control -->
+                    <div class="segmented-control" role="tablist">
+                        <button class="seg-btn active" data-tab="notice" role="tab" aria-selected="true">notice.log</button>
+                        <button class="seg-btn" data-tab="http" role="tab" aria-selected="false">http.log</button>
+                        <button class="seg-btn" data-tab="conn" role="tab" aria-selected="false">conn.log</button>
+                        <button class="seg-btn" data-tab="correlation" role="tab" aria-selected="false">Correlation</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 1: notice.log -->
+            <div class="tab-pane active" id="pane-notice">
+                <div class="table-wrap">
+                    <table class="minimal-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Connection UID</th>
+                                <th>Notice</th>
+                                <th>Message</th>
+                                <th>Source</th>
+                                <th>Destination</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-notice"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab 2: http.log -->
+            <div class="tab-pane" id="pane-http">
+                <div class="table-wrap">
+                    <table class="minimal-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Connection UID</th>
+                                <th>Method</th>
+                                <th>Host</th>
+                                <th>URI</th>
+                                <th>Status</th>
+                                <th>User agent</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-http"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab 3: conn.log -->
+            <div class="tab-pane" id="pane-conn">
+                <div class="table-wrap">
+                    <table class="minimal-table">
+                        <thead>
+                            <tr>
+                                <th>Connection UID</th>
+                                <th>Originating socket</th>
+                                <th>Responding socket</th>
+                                <th>Protocol</th>
+                                <th>State</th>
+                                <th>TX bytes</th>
+                                <th>RX bytes</th>
+                                <th>Duration</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-conn"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab 4: Correlation Matrix -->
+            <div class="tab-pane" id="pane-correlation">
+                <div class="correlation-list" id="correlation-list"></div>
+            </div>
+        </section>
+
+        <div class="hairline"></div>
+
+        <!-- Section 3: Canarytoken Audit Trail -->
+        <section class="section">
+            <div class="section-heading">
+                <div class="section-title-wrap">
+                    <span class="section-label">SEC-03</span>
+                    <h2 class="section-title">Canarytoken forensic audit trail</h2>
+                </div>
+                <button class="btn-subtle" id="btn-trigger-canary">Simulate attacker probe</button>
+            </div>
+
+            <div class="canary-layout">
+                <div class="canary-column">
+                    <span class="canary-col-title">Planted credential configuration</span>
+                    <div class="code-surface">
+                        <pre class="mono">[canary]
+aws_access_key_id = AKIATU7L4S6WVXD4O77Z
+aws_secret_access_key = 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
+
+# Verification probe executed:
+$ aws sts get-caller-identity --profile canary --region us-east-1</pre>
+                    </div>
+                </div>
+
+                <div class="canary-column">
+                    <span class="canary-col-title">CloudTrail ingestion event record</span>
+                    <div class="code-surface">
+                        <pre class="mono" id="cloudtrail-pre">{
+  "eventVersion": "1.08",
+  "userIdentity": {
+    "type": "IAMUser",
+    "principalId": "AIDATU7L4S6W5LRX4CBJF",
+    "arn": "arn:aws:iam::251213420461:user/azqjoxxwnbghiqrlgpsilbuqdrvuarunrsbsgtbgvlitxufczq",
+    "accountId": "251213420461",
+    "accessKeyId": "AKIATU7L4S6WVXD4O77Z"
+  },
+  "eventTime": "2026-09-29T09:18:45Z",
+  "eventSource": "sts.amazonaws.com",
+  "eventName": "GetCallerIdentity",
+  "awsRegion": "us-east-1",
+  "sourceIPAddress": "198.51.100.42",
+  "userAgent": "aws-cli/2.15.15 Python/3.11.6 Darwin/23.4.0",
+  "eventType": "AwsApiCall"
+}</pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="hairline"></div>
+
+        <!-- Section 4: Performance Comparison -->
+        <section class="section">
+            <div class="section-heading">
+                <div class="section-title-wrap">
+                    <span class="section-label">SEC-04</span>
+                    <h2 class="section-title">Comparative detection velocity</h2>
+                </div>
+            </div>
+
+            <div class="table-wrap">
+                <table class="minimal-table metrics-table">
+                    <thead>
+                        <tr>
+                            <th>Evaluation metric</th>
+                            <th>2019 Capital One reality</th>
+                            <th>With Zeek network monitoring</th>
+                            <th>With Canarytoken honeykeys</th>
+                            <th>Defense-in-depth outcome</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="metric-name">Mean time to detect (MTTD)</td>
+                            <td>108 days (March 22 – July 17)</td>
+                            <td class="accent-cell">&lt; 0.01 seconds</td>
+                            <td class="accent-cell">15–30 seconds</td>
+                            <td>Zero dwell time before operational alerting</td>
+                        </tr>
+                        <tr>
+                            <td class="metric-name">Detection vector</td>
+                            <td>External tipster (GitHub dump)</td>
+                            <td>Passive L4/L7 policy inspection</td>
+                            <td>CloudTrail STS honeypot tripwire</td>
+                            <td>Zero reliance on external reporting</td>
+                        </tr>
+                        <tr>
+                            <td class="metric-name">Log correlation effort</td>
+                            <td>Manual multi-month cross reference</td>
+                            <td>Automated connection UID</td>
+                            <td>Pre-attributed decoy identity</td>
+                            <td>Single token ties transport, HTTP, and alert</td>
+                        </tr>
+                        <tr>
+                            <td class="metric-name">False positive probability</td>
+                            <td>Not applicable</td>
+                            <td>Low (specific to 169.254.169.254)</td>
+                            <td>0% (decoy credentials)</td>
+                            <td>Any interaction is by definition unauthorized</td>
+                        </tr>
+                        <tr>
+                            <td class="metric-name">Architectural remediation</td>
+                            <td>None in place</td>
+                            <td>Egress link-local controls</td>
+                            <td>Least privilege IAM scoping</td>
+                            <td>Enforce IMDSv2 (session token, hop limit=1)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-inner">
+            <span>Capital One breach defense-in-depth demonstration</span>
+            <span class="footer-sep">·</span>
+            <span>Zeek v9.0.0 and Thinkst Canarytokens</span>
+            <span class="footer-sep">·</span>
+            <span class="mono">SEC-2019-CAPONE</span>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
