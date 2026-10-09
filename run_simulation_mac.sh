@@ -1,6 +1,10 @@
 #!/bin/bash
 # Native macOS Execution Script (Requires 'brew install zeek')
+if [[ "$1" == "-i" ]] || [[ "$1" == "--interactive" ]]; then
+    exec python3 "$(dirname "$0")/run_interactive_demo.py"
+fi
 set -e
+
 
 if ! command -v zeek >/dev/null 2>&1; then
     echo "[-] Zeek is not installed natively on macOS."
@@ -35,11 +39,11 @@ cleanup() {
 trap cleanup EXIT
 
 echo "[2/7] Starting toy vulnerable application on 0.0.0.0:8080..."
-python3 vuln_app.py 8080 > /tmp/vuln_app.log 2>&1 &
+python3 services/vuln_app.py 8080 > /tmp/vuln_app.log 2>&1 &
 VULN_PID=$!
 
 echo "[3/7] Starting fake AWS EC2 metadata service on 0.0.0.0:80..."
-python3 fake_metadata.py 0.0.0.0 80 > /tmp/fake_metadata.log 2>&1 &
+python3 services/fake_metadata.py 0.0.0.0 80 > /tmp/fake_metadata.log 2>&1 &
 META_PID=$!
 
 echo "[*] Verifying services readiness..."
@@ -55,7 +59,8 @@ echo "[4/7] Launching Zeek network monitor on lo0 with ssrf_detect.zeek..."
 cd "$LOG_DIR"
 rm -f *.log
 
-sudo zeek -C -i lo0 "$(pwd)/../ssrf_detect.zeek" > /tmp/zeek.stdout 2>&1 &
+sudo zeek -C -i lo0 "$(pwd)/../zeek/ssrf_detect.zeek" > /tmp/zeek.stdout 2>&1 &
+
 ZEEK_PID=$!
 sleep 2
 

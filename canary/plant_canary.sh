@@ -30,12 +30,11 @@ if [ -z "$CANARY_KEY" ] || [ -z "$CANARY_SECRET" ]; then
 fi
 
 python3 -c "
-import os
+import os, sys
 
 path = os.path.expanduser('~/.aws/credentials')
 os.makedirs(os.path.dirname(path), exist_ok=True)
 
-# Read existing lines if any, filtering out old [canary] sections
 lines = []
 if os.path.exists(path):
     with open(path, 'r') as f:
@@ -49,23 +48,17 @@ if os.path.exists(path):
             if not in_canary:
                 lines.append(line)
 
-# Append clean canary section
 canary_block = f'''
 [canary]
-aws_access_key_id = {sys_key}
-aws_secret_access_key = {sys_secret}
+aws_access_key_id = {sys.argv[1]}
+aws_secret_access_key = {sys.argv[2]}
 '''
 
 with open(path, 'w') as f:
     f.writelines(lines)
     f.write(canary_block.strip() + '\n')
-" "$CANARY_KEY" "$CANARY_SECRET" 2>/dev/null || python3 -c "
-import os, sys
-path = os.path.expanduser('~/.aws/credentials')
-os.makedirs(os.path.dirname(path), exist_ok=True)
-with open(path, 'w') as f:
-    f.write(f'[canary]\naws_access_key_id = {sys.argv[1]}\naws_secret_access_key = {sys.argv[2]}\n')
 " "$CANARY_KEY" "$CANARY_SECRET"
+
 
 echo ""
 echo "[+] Decoy AWS credentials planted successfully in ~/.aws/credentials:"

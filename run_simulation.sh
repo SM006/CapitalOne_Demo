@@ -1,5 +1,11 @@
 #!/bin/bash
+if [[ "$1" == "-i" ]] || [[ "$1" == "--interactive" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    exec python3 "$SCRIPT_DIR/run_interactive_demo.py"
+fi
+
 set -e
+
 
 LOG_DIR="${LOG_DIR:-/demo/logs}"
 mkdir -p "$LOG_DIR"
@@ -16,11 +22,11 @@ elif command -v ifconfig >/dev/null 2>&1; then
 fi
 
 echo "[2/7] Starting toy vulnerable application on 0.0.0.0:8080..."
-python3 /demo/vuln_app.py 8080 > /tmp/vuln_app.log 2>&1 &
+python3 /demo/services/vuln_app.py 8080 > /tmp/vuln_app.log 2>&1 &
 VULN_PID=$!
 
 echo "[3/7] Starting fake AWS EC2 metadata service on 0.0.0.0:80 (accessible via 169.254.169.254)..."
-python3 /demo/fake_metadata.py 0.0.0.0 80 > /tmp/fake_metadata.log 2>&1 &
+python3 /demo/services/fake_metadata.py 0.0.0.0 80 > /tmp/fake_metadata.log 2>&1 &
 META_PID=$!
 
 cleanup() {
@@ -54,7 +60,8 @@ cd "$LOG_DIR"
 rm -f *.log
 
 # -C ignores checksum offloading on loopback interfaces
-zeek -C -i "$IFACE" /demo/ssrf_detect.zeek > /tmp/zeek.stdout 2>&1 &
+zeek -C -i "$IFACE" /demo/zeek/ssrf_detect.zeek > /tmp/zeek.stdout 2>&1 &
+
 ZEEK_PID=$!
 sleep 2
 echo "[+] Zeek running (PID: $ZEEK_PID) on interface $IFACE"

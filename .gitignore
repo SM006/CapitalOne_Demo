@@ -9,9 +9,11 @@ Thumbs.db
 
 # Large or Runtime Generated Log Files
 logs_mac/
+logs_live/
 *.log
 *.stdout
 /tmp/
+
 
 # Python Cache & Environments
 __pycache__/

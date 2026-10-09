@@ -70,5 +70,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
     print(f"[*] Starting Vulnerable Application on {host}:{port}...")
+    print(f"    (To run the interactive step-by-step demo, use: python3 run_interactive_demo.py)")
     server = HTTPServer((host, port), SSRFProxyHandler)
+
     server.serve_forever()

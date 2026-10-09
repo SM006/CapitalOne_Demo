@@ -17,11 +17,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /demo
 
 # Copy demo code
-COPY vuln_app.py .
-COPY fake_metadata.py .
-COPY ssrf_detect.zeek .
+COPY services/ services/
+COPY zeek/ zeek/
+COPY canary/ canary/
 COPY run_simulation.sh .
+COPY run_interactive_demo.py .
 
-RUN chmod +x run_simulation.sh
+RUN chmod +x run_simulation.sh run_interactive_demo.py canary/*.sh
+
 
 CMD ["/bin/bash"]

@@ -70,5 +70,7 @@ if __name__ == "__main__":
         port = int(sys.argv[2])
 
     print(f"[*] Starting EC2 Mock Metadata Service on {host}:{port}...")
+    print(f"    (To run the interactive step-by-step demo, use: python3 run_interactive_demo.py)")
     server = HTTPServer((host, port), MetadataHandler)
+
     server.serve_forever()

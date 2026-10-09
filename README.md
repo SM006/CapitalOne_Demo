@@ -67,40 +67,47 @@ This lab proves that deploying two defense-in-depth controls provides instantane
 ```text
 .
 ├── README.md                # Comprehensive documentation, case study, and run guide
-├── Dockerfile               # Turnkey container with Zeek, Python, and AWS CLI
-├── docker-compose.yml       # Container composition with NET_ADMIN capability
-├── vuln_app.py              # Toy HTTP service simulating SSRF-vulnerable WAF proxy
-├── fake_metadata.py         # Mock AWS IMDSv1 service on 169.254.169.254:80
-├── ssrf_detect.zeek         # Custom Zeek detection policy for metadata IP queries
-├── run_simulation.sh        # Automated end-to-end runner (IP aliasing, Zeek, correlation)
+├── run_interactive_demo.py  # Interactive step-by-step CLI demo runner (Presenter Mode)
 ├── run_simulation_mac.sh    # Native macOS execution script (lo0 alias)
-├── plant_canary.sh          # Helper script to plant decoy AWS credentials
-├── trigger_canary.sh        # Attacker reconnaissance simulator (aws sts get-caller-identity)
-├── logs/                    # Captured Zeek logs from simulation (conn, http, notice)
-└── dashboard/               # Minimalist Apple-inspired SOC operations console
-    ├── index.html
-    ├── style.css
-    └── app.js
+├── run_simulation.sh        # Docker container simulation script
+├── Dockerfile               # Turnkey container with Zeek, Python, and AWS CLI
+
+├── docker-compose.yml       # Container composition with NET_ADMIN capability
+├── services/                # Simulated target infrastructure
+│   ├── vuln_app.py          # Toy HTTP service simulating SSRF-vulnerable WAF proxy
+│   └── fake_metadata.py     # Mock AWS IMDSv1 service on 169.254.169.254:80
+├── zeek/                    # Network security monitoring policies
+│   └── ssrf_detect.zeek     # Custom Zeek detection policy for metadata IP queries
+├── docs/                    # Presenter runbooks & manual guides
+│   ├── TERMINAL_DEMO_RUNBOOK.md
+│   └── STEP_BY_STEP_MANUAL_GUIDE.md
+├── canary/                  # Thinkst Canarytoken deception tools
+│   ├── plant_canary.sh      # Plant decoy AWS keys into ~/.aws/credentials
+│   └── trigger_canary.sh    # Simulate attacker reconnaissance (aws sts)
+├── dashboard/               # Minimalist Apple-inspired SOC operations console
+│   ├── index.html
+│   ├── style.css
+│   └── app.js
+└── logs/                    # Reference Zeek logs from simulation (conn, http, notice)
 ```
+
+
 
 ---
 
 ## 4. Quick Start & Lab Execution
 
-### Option A: Docker (Recommended)
-Runs in an isolated container without requiring root configuration or tool installation on your host machine:
+### Option A: Interactive Step-by-Step CLI (Presenter Mode)
+Walks through the demo step-by-step with concise technical descriptions, exact command previews, and waits for you to press **[ENTER]** before executing each command:
 
 ```bash
-# Build and run the simulation in one command:
-docker run --rm --cap-add=NET_ADMIN -v "$(pwd):/demo" capitalone-zeek-demo /demo/run_simulation.sh
+# Run the interactive presenter runner:
+python3 run_interactive_demo.py
 ```
-
-**What this script does automatically:**
-1. Configures the loopback alias `169.254.169.254/32`.
-2. Starts the vulnerable proxy on `0.0.0.0:8080` and fake metadata service on port `80`.
-3. Launches Zeek with `ssrf_detect.zeek`.
-4. Fires the simulated SSRF attack to extract credentials and exfiltrate S3 data.
-5. Emits cut and correlated log outputs (`conn.log`, `http.log`, `notice.log`).
+*Keyboard controls:*
+- Press **[ENTER]** to execute the step
+- Type `s` and press **[ENTER]** to skip a step
+- Type `q` and press **[ENTER]** to exit and auto-cleanup background processes
 
 ---
 
@@ -112,9 +119,25 @@ If you prefer running directly on macOS:
 # 1. Install Zeek (Homebrew)
 brew install zeek
 
-# 2. Run the macOS simulation script
-./run_simulation_mac.sh
+# 2. Run the macOS simulation script (interactive or non-interactive)
+./run_simulation_mac.sh -i   # Interactive mode (pauses on Enter)
+./run_simulation_mac.sh      # Automated non-stop mode
 ```
+
+---
+
+### Option C: Docker (Headless Container)
+Runs in an isolated container without requiring root configuration or tool installation on your host machine:
+
+```bash
+# Build and run the simulation in one command:
+docker run --rm --cap-add=NET_ADMIN -v "$(pwd):/demo" capitalone-zeek-demo /demo/run_simulation.sh
+```
+
+---
+
+### Option D: Web Operations Console
+
 
 ---
 
