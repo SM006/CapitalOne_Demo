@@ -1,0 +1,13 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	http
+#open	2026-09-29-09-03-49
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	trans_depth	method	host	uri	referrer	version	user_agent	origin	request_body_len	response_body_len	status_code	status_msg	info_code	info_msg	tags	username	password	proxied	orig_fuids	orig_filenames	orig_mime_types	resp_fuids	resp_filenames	resp_mime_types
+#types	time	string	addr	port	addr	port	count	string	string	string	string	string	string	string	count	count	count	string	count	string	set[enum]	string	string	set[string]	vector[string]	vector[string]	vector[string]	vector[string]	vector[string]	vector[string]
+1790672629.461230	CjbXsRqWg8nivYnui	169.254.169.254	46748	169.254.169.254	80	1	GET	169.254.169.254	/latest/meta-data/iam/security-credentials/WAF-Role-CapitalOne-Production	-	1.0	WAF-Proxy-Demo/1.0	-	0	333	200	OK	-	-	(empty)	-	-	-	-	-	-	F5tAayNZgmQVae3Ed	-	text/json
+1790672629.439358	CINDfJ27E2fRaKJzVf	127.0.0.1	44626	127.0.0.1	8080	1	GET	127.0.0.1:8080	/fetch?url=http://169.254.169.254/latest/meta-data/iam/security-credentials/WAF-Role-CapitalOne-Production	-	1.0	curl/8.14.1	-	0	333	200	OK	-	-	(empty)	-	-	-	-	-	-	F6omD51CXSFfpgzRxk	-	text/json
+1790672629.480405	CCHznt2GFsuQhsfvsk	169.254.169.254	46758	169.254.169.254	80	1	GET	169.254.169.254	/mock-s3-bucket/sync	-	1.0	WAF-Proxy-Demo/1.0	-	0	290	200	OK	-	-	(empty)	-	-	-	-	-	-	FJ3vE83RSSTMnKzJ55	-	text/json
+1790672629.479822	C1AKQ61lPHgHJ1WiQg	127.0.0.1	44640	127.0.0.1	8080	1	GET	127.0.0.1:8080	/fetch?url=http://169.254.169.254/mock-s3-bucket/sync	-	1.0	curl/8.14.1	-	0	290	200	OK	-	-	(empty)	-	-	-	-	-	-	FQ4rxE4vg637v2sc53	-	text/json
+#close	2026-09-29-09-03-52

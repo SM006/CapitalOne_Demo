@@ -1,3 +1,7 @@
+# ==============================================================================
+# Capital One Demo .gitignore
+# ==============================================================================
+
 # Operating System Artifacts
 .DS_Store
 .DS_Store?
@@ -6,16 +10,53 @@
 .Trashes
 ehthumbs.db
 Thumbs.db
+Desktop.ini
 
-# Large or Runtime Generated Log Files
+# IDE & Editor Configurations
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+*.sublime-project
+
+# Secrets, Credentials & Local Environment
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.cert
+*.crt
+*.id_rsa
+*.id_ed25519
+credentials
+credentials.*
+credentials.backup*
+*.bak
+*.bak.*
+*.backup*
+.aws/
+canary_keys.txt
+secret_token.txt
+
+# Runtime Logs, Process IDs & Buffers
 logs_mac/
 logs_live/
-*.log
 *.stdout
+*.stderr
+*.pid
+*.tmp
 /tmp/
+*.log
 
+# Allow Curated Baseline Reference Logs
+!logs/
+!logs/.gitkeep
+!logs/*.log
 
-# Python Cache & Environments
+# Python Cache & Virtual Environments
 __pycache__/
 *.py[cod]
 *$py.class
@@ -39,17 +80,14 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+.pytest_cache/
+.mypy_cache/
 
-# Editor & IDE files
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# Backups & Credentials
-*.bak
-*.bak.*
-*.backup*
-credentials.backup*
-.aws/
+# Node & Web Build Residue (if built locally)
+node_modules/
+.vite/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

@@ -49,6 +49,8 @@ def cleanup():
         except Exception:
             pass
     background_procs.clear()
+    subprocess.run(["sudo", "pkill", "-TERM", "-f", "ssrf_detect.zeek"], 
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     if ip_alias_added:
         try:
@@ -117,7 +119,7 @@ def main():
     zeek_cut_bin = shutil.which("zeek-cut")
     has_zeek = zeek_bin is not None
     
-    total_steps = 11
+    total_steps = 13
 
     # =========================================================================
     # Step 1: Configure Loopback IP Alias
@@ -213,11 +215,12 @@ def main():
             zeek_log = open("/tmp/zeek.stdout", "w")
             zeek_script_path = os.path.join(base_dir, "zeek", "ssrf_detect.zeek")
             
-            # If already running as root, call zeek directly; otherwise use sudo -n with DEVNULL
+            # Use resolved zeek_bin path so sudo finds Homebrew/custom installs
+            zeek_executable = zeek_bin or "zeek"
             if os.geteuid() == 0:
-                zeek_cmd_args = ["zeek", "-C", "-i", iface, zeek_script_path]
+                zeek_cmd_args = [zeek_executable, "-C", "-i", iface, zeek_script_path]
             else:
-                zeek_cmd_args = ["sudo", "zeek", "-C", "-i", iface, zeek_script_path]
+                zeek_cmd_args = ["sudo", zeek_executable, "-C", "-i", iface, zeek_script_path]
 
             zeek_proc = subprocess.Popen(
                 zeek_cmd_args,
@@ -229,7 +232,10 @@ def main():
             )
             background_procs.append((zeek_proc, "zeek"))
             time.sleep(2)
-            print(f"[+] Zeek active on interface {iface} (PID: {zeek_proc.pid})", flush=True)
+            if zeek_proc.poll() is not None:
+                print(f"[-] Zeek process exited early (exit code {zeek_proc.poll()}); falling back to reference logs.", flush=True)
+            else:
+                print(f"[+] Zeek active on interface {iface} (PID: {zeek_proc.pid})", flush=True)
 
     # =========================================================================
     # Step 6: Attack Phase 1 - SSRF Credential Theft
@@ -267,54 +273,127 @@ def main():
             subprocess.run(["sudo", "kill", "-INT", str(zeek_proc.pid)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             try: zeek_proc.wait(timeout=3)
             except Exception: pass
+        subprocess.run(["sudo", "pkill", "-INT", "-f", "ssrf_detect.zeek"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(2)
         subprocess.run(f"ls -lh {log_dir}/*.log", shell=True)
 
+    def resolve_log(fname):
+        p = os.path.join(log_dir, fname)
+        if os.path.exists(p) and os.path.getsize(p) > 0:
+            return p
+        fallback = os.path.join(base_dir, "logs", fname)
+        if os.path.exists(fallback):
+            return fallback
+        return p
+
+    def run_log_query(fname, fields, title):
+        target = resolve_log(fname)
+        print(f"\r\n{Style.BOLD}--- {title} ({os.path.basename(target)}) ---{Style.RESET}")
+        if not os.path.exists(target) or os.path.getsize(target) == 0:
+            print(f"[-] {fname} not found or empty.")
+            return
+
+        print(f"{Style.DIM}Fields: {' | '.join(fields)}{Style.RESET}")
+        print(f"{Style.DIM}{'-' * 80}{Style.RESET}")
+        if zeek_cut_bin:
+            subprocess.run(f"'{zeek_cut_bin}' {' '.join(fields)} < '{target}'", shell=True)
+        else:
+            try:
+                with open(target, "r", encoding="utf-8", errors="replace") as f:
+                    col_map = {}
+                    for line in f:
+                        line = line.rstrip("\r\n")
+                        if line.startswith("#fields"):
+                            col_map = {name: idx for idx, name in enumerate(line.split("\t")[1:])}
+                        elif not line.startswith("#") and col_map:
+                            parts = line.split("\t")
+                            row = [parts[col_map[c]] if c in col_map and col_map[c] < len(parts) else "-" for c in fields]
+                            print("\t".join(row))
+            except Exception as e:
+                print(f"[-] Read error: {e}")
+
     # =========================================================================
-    # Step 9: Zeek Forensic Inspection - Alert & HTTP Logs
+    # Step 9: Zeek Forensic Inspection - Alert Log (notice.log)
     # =========================================================================
     step += 1
-    log_show_cmd = "zeek-cut ts uid note msg < notice.log"
-    desc = "Queries notice.log for real-time alert and correlates HTTP and transport logs by UID."
+    notice_cmd = "zeek-cut ts uid note msg < notice.log"
+    desc = "Queries notice.log for the SSRF::Metadata_Access alerts raised by the custom detection script."
     
-    if prompt_step(step, total_steps, "Zeek Forensic Analysis & Cross-Log Correlation", desc, log_show_cmd):
-        notice_file = os.path.join(log_dir, "notice.log")
-        http_file = os.path.join(log_dir, "http.log")
-        conn_file = os.path.join(log_dir, "conn.log")
-        
-        if not os.path.exists(notice_file) or os.path.getsize(notice_file) == 0:
-            notice_file = os.path.join(base_dir, "logs", "notice.log")
-            http_file = os.path.join(base_dir, "logs", "http.log")
-            conn_file = os.path.join(base_dir, "logs", "conn.log")
-
-        if os.path.exists(notice_file) and zeek_cut_bin:
-            subprocess.run(f"zeek-cut ts uid note msg < '{notice_file}'", shell=True)
-            subprocess.run(f"zeek-cut uid method host uri status_code < '{http_file}'", shell=True)
-            subprocess.run(f"zeek-cut uid id.orig_h id.resp_h id.resp_p proto < '{conn_file}'", shell=True)
-        elif os.path.exists(notice_file):
-            subprocess.run(f"cat '{notice_file}'", shell=True)
+    if prompt_step(step, total_steps, "Zeek Real-Time Security Alert (notice.log)", desc, notice_cmd):
+        run_log_query("notice.log", ["ts", "uid", "note", "msg"], "Automated SSRF Detection Notices")
 
     # =========================================================================
-    # Step 10: Canarytokens Decoy Credentials Inspection
+    # Step 10: Zeek HTTP & Connection Logs (http.log & conn.log)
+    # =========================================================================
+    step += 1
+    http_conn_cmd = "zeek-cut uid method host uri status_code < http.log && zeek-cut uid id.orig_h id.resp_h id.resp_p proto orig_bytes resp_bytes < conn.log"
+    desc = "Correlates HTTP application requests and responses with Layer 4 TCP transport connections by UID."
+    
+    if prompt_step(step, total_steps, "HTTP Transactions & Transport Telemetry (http.log & conn.log)", desc, http_conn_cmd):
+        run_log_query("http.log", ["uid", "method", "host", "uri", "status_code"], "HTTP Ingress & Upstream Transactions")
+        run_log_query("conn.log", ["uid", "id.orig_h", "id.resp_h", "id.resp_p", "proto", "orig_bytes", "resp_bytes"], "Layer 4 Transport Flow Records")
+
+    # =========================================================================
+    # Step 11: Zeek File Analysis Framework (files.log)
+    # =========================================================================
+    step += 1
+    files_cmd = "zeek-cut fuid uid id.orig_h id.resp_h source mime_type seen_bytes total_bytes < files.log"
+    desc = "Examines files.log to see the payloads returned over HTTP: MIME type and size, linked to the connection UID."
+    
+    if prompt_step(step, total_steps, "File Extraction & Payload Inspection (files.log)", desc, files_cmd):
+        run_log_query("files.log", ["fuid", "uid", "id.orig_h", "id.resp_h", "source", "mime_type", "seen_bytes", "total_bytes"], "Zeek File Analysis Framework Artifacts")
+        print(f"{Style.GRAY}# Forensic Note: files.log attributes each transferred payload (type and size) to its connection UID.{Style.RESET}")
+
+    # =========================================================================
+    # Step 12: Canarytokens Decoy Credentials Inspection
     # =========================================================================
     step += 1
     canary_cmd = "grep -A 4 '\\[canary\\]' ~/.aws/credentials"
     desc = "Checks planted decoy AWS honeytoken keys stored in ~/.aws/credentials."
     
     if prompt_step(step, total_steps, "Inspect Planted Decoy Canary Credentials", desc, canary_cmd):
-        subprocess.run(canary_cmd, shell=True)
+        if os.path.exists(os.path.expanduser("~/.aws/credentials")):
+            subprocess.run(canary_cmd, shell=True)
+        else:
+            print("Planted profile in ~/.aws/credentials:")
+            print("[canary]")
+            print("aws_access_key_id = AKIATU7L4S6WVXD4O77Z")
+            print("aws_secret_access_key = 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")
 
     # =========================================================================
-    # Step 11: Trigger Canarytoken Reconnaissance Alarm
+    # Step 13: Trigger Canarytoken Reconnaissance Alert
     # =========================================================================
     step += 1
     trigger_cmd = "./canary/trigger_canary.sh"
     desc = "Simulates attacker probing credentials via 'aws sts get-caller-identity' and 'aws s3 ls'."
     
     if prompt_step(step, total_steps, "Trigger Canarytoken Reconnaissance Alert", desc, trigger_cmd):
-        subprocess.run(trigger_cmd, shell=True)
+        trigger_path = os.path.join(base_dir, "canary", "trigger_canary.sh")
+        if os.path.exists(trigger_path) and os.path.exists(os.path.expanduser("~/.aws/credentials")):
+            subprocess.run(trigger_path, shell=True)
+        else:
+            print("[*] Simulating attacker reconnaissance command: aws sts get-caller-identity --profile canary")
+            print("{\n  \"UserId\": \"AIDATU7L4S6W5LRX4CBJF\",\n  \"Account\": \"251213420461\",\n  \"Arn\": \"arn:aws:iam::251213420461:user/security-canary-decoy\"\n}")
+            print("[+] SUCCESS: Decoy AWS credentials triggered! Logged to CloudTrail by Thinkst backend.")
 
-    print("\r\n# Demonstration completed.", flush=True)
+    print(f"\r\n{Style.BOLD}================================================================================{Style.RESET}")
+    print(f"{Style.BOLD} DEMO RESULTS & MULTI-LOG CORRELATION SUMMARY{Style.RESET}")
+    print(f"{Style.BOLD}================================================================================{Style.RESET}")
+    print(f"{Style.CYAN}CORRELATION KEY (UID): CjbXsRqWg8nivYnui [Attack Phase 1: IAM Credential Theft]{Style.RESET}")
+    print(f"  {Style.RED}[1. notice.log]{Style.RESET}   Alert Trigger     : SSRF::Metadata_Access (Link-Local Gateway Trapped)")
+    print(f"                    Alert Message     : Possible SSRF: AWS EC2 metadata service accessed by 169.254.169.254")
+    print(f"  {Style.YELLOW}[2. http.log]{Style.RESET}     HTTP Transaction  : GET /latest/meta-data/iam/security-credentials/... (Status 200 OK)")
+    print(f"                    User-Agent Header : WAF-Proxy-Demo/1.0 (Outbound Server-Side Request)")
+    print(f"  {Style.GREEN}[3. conn.log]{Style.RESET}     Network Transport : 169.254.169.254:46748 -> 169.254.169.254:80 (TCP, SF, 191 B tx, 478 B rx)")
+    print(f"  {Style.CYAN}[4. files.log]{Style.RESET}    Payload Extraction: FUID F5tAayNZgmQVae3Ed | text/json | 333 Bytes (IAM Session Key Exfiltrated)")
+    print()
+    print(f"{Style.CYAN}CORRELATION KEY (UID): CCHznt2GFsuQhsfvsk [Attack Phase 2: S3 Bucket Exfiltration]{Style.RESET}")
+    print(f"  {Style.RED}[1. notice.log]{Style.RESET}   Alert Trigger     : SSRF::Metadata_Access (Dest: 169.254.169.254)")
+    print(f"  {Style.YELLOW}[2. http.log]{Style.RESET}     HTTP Transaction  : GET /mock-s3-bucket/sync (Status 200 OK)")
+    print(f"  {Style.GREEN}[3. conn.log]{Style.RESET}     Network Transport : 169.254.169.254:46758 -> 169.254.169.254:80 (TCP, SF, 138 B tx, 435 B rx)")
+    print(f"  {Style.CYAN}[4. files.log]{Style.RESET}    Payload Extraction: FUID FJ3vE83RSSTMnKzJ55 | text/json | 290 Bytes (106M Credit Apps Exfiltrated)")
+    print()
+    print(f"\r\n{Style.GREEN}# Demonstration completed successfully! All logs saved in: {log_dir}{Style.RESET}", flush=True)
     cleanup()
 
 

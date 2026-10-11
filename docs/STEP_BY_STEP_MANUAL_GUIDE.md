@@ -16,7 +16,7 @@ This guide provides the exact terminal command, the technical explanation of wha
 Open your terminal and navigate to the project directory:
 
 ```bash
-cd /Users/shreya/Desktop/CapitalOne_Demo
+cd ~/Desktop/CapitalOne_Demo
 ```
 
 > **Note on OS Differences:**
@@ -433,11 +433,30 @@ CjbXsRqWg8nivYnui  169.254.169.254  169.254.169.254  80  tcp  191  478
 
 ---
 
+### Step 12: Pivot to Payload File Extraction (`files.log`)
+
+Inspect extracted file and payload streams tracked by Zeek's File Analysis Framework:
+
+#### Command:
+```bash
+zeek-cut fuid uid id.orig_h id.resp_h source mime_type seen_bytes total_bytes < logs_live/files.log | grep "$ALERT_UID"
+```
+
+**Expected Output:**
+```text
+F5tAayNZgmQVae3Ed  CjbXsRqWg8nivYnui  169.254.169.254  169.254.169.254  HTTP  text/json  333  333
+```
+
+#### What to explain:
+> *"In `files.log`, Zeek's File Analysis Framework automatically identifies that an HTTP file transfer occurred, gives it a unique File UID (`F5tAayNZgmQVae3Ed`), binds it to the connection UID, identifies the MIME type as `text/json`, and confirms exactly 333 bytes transferred—the precise byte length of the stolen IAM credentials payload. This provides irrefutable wire-speed evidence of the exfiltrated payload."*
+
+---
+
 ## Phase 5: Active Deception with Canarytokens
 
 Now showcase the second defense layer: active deception via honeytokens.
 
-### Step 12: Plant the Decoy Credentials
+### Step 13: Plant the Decoy Credentials
 
 Plant decoy AWS credentials under the `[canary]` profile:
 
@@ -466,7 +485,7 @@ grep -A 2 "\[canary\]" ~/.aws/credentials
 
 ---
 
-### Step 13: Simulate Attacker Key Reconnaissance
+### Step 14: Simulate Attacker Key Reconnaissance
 
 When attackers discover credentials, the first command they run is identity verification (`sts:GetCallerIdentity`):
 
@@ -525,11 +544,11 @@ rm -rf logs_live
 | **2** | `python3 services/fake_metadata.py 0.0.0.0 80 &` | Start mock AWS IMDSv1 service |
 | **3** | `python3 services/vuln_app.py 8080 &` | Start vulnerable reverse proxy |
 | **4** | `sudo zeek -C -i lo0 zeek/ssrf_detect.zeek &` | Start Zeek loopback packet capture |
-
 | **5** | `curl "http://127.0.0.1:8080/fetch?url=http://169.254.169.254/latest/meta-data/iam/security-credentials/WAF-Role-CapitalOne-Production"` | Fire SSRF credential extraction attack |
 | **6** | `sudo kill -INT <ZEEK_PID>` | Stop Zeek and flush logs to disk |
 | **7** | `zeek-cut ts uid note msg < notice.log` | View real-time security notice alert |
 | **8** | `zeek-cut uid method host uri < http.log \| grep <UID>` | Correlate HTTP application payload |
 | **9** | `zeek-cut uid id.orig_h id.resp_h proto < conn.log \| grep <UID>` | Correlate Layer 4 transport connection |
-| **10** | `aws sts get-caller-identity --profile canary --region us-east-1` | Trigger Canarytoken tripwire alert |
-| **11** | `sudo ifconfig lo0 -alias 169.254.169.254` | Remove loopback alias |
+| **10** | `zeek-cut fuid uid id.orig_h id.resp_h source mime_type seen_bytes total_bytes < files.log \| grep <UID>` | Correlate extracted payload stream |
+| **11** | `aws sts get-caller-identity --profile canary --region us-east-1` | Trigger Canarytoken tripwire alert |
+| **12** | `sudo ifconfig lo0 -alias 169.254.169.254` | Remove loopback alias |

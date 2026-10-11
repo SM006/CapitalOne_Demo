@@ -21,7 +21,7 @@ A presenter runbook for demonstrating the **Capital One SSRF Breach**, **Zeek Ne
 Open your terminal and ensure you are in the project folder:
 
 ```bash
-cd /Users/shreya/Desktop/CapitalOne_Demo
+cd ~/Desktop/CapitalOne_Demo
 ```
 
 Verify Docker is running:
@@ -51,7 +51,7 @@ docker run --rm --cap-add=NET_ADMIN -v "$(pwd):/demo" capitalone-zeek-demo /demo
 1. Aliases the AWS metadata IP `169.254.169.254` on the loopback interface.
 2. Boots `services/vuln_app.py` (simulating the vulnerable WAF reverse proxy on port `8080`).
 3. Boots `services/fake_metadata.py` (simulating AWS IMDSv1 on port `80`).
-4. Launches Zeek passive network monitor with [`zeek/ssrf_detect.zeek`](file:///Users/shreya/Desktop/CapitalOne_Demo/zeek/ssrf_detect.zeek).
+4. Launches Zeek passive network monitor with `zeek/ssrf_detect.zeek`.
 5. Fires the simulated attack:
 
    - Queries `/fetch?url=http://169.254.169.254/latest/meta-data/iam/security-credentials/WAF-Role-CapitalOne-Production`
@@ -108,6 +108,21 @@ CjbXsRqWg8nivYnui  169.254.169.254  169.254.169.254  80  tcp  191  478
 
 > **Speaker Script:**  
 > *"And in `conn.log`, we have full Layer 4 tracking: source IP, destination IP, port 80, TCP protocol, and exact byte counts. In 2019, Capital One took months to correlate VPC flow logs and application logs manually. Zeek correlates them automatically at capture time."*
+
+---
+
+### Command 4 — Inspect Payload File Extraction (files.log):
+```bash
+zeek-cut fuid uid id.orig_h id.resp_h source mime_type seen_bytes total_bytes < logs/files.log | grep "CjbXsRqWg8nivYnui"
+```
+
+**Expected Terminal Output:**
+```text
+F5tAayNZgmQVae3Ed  CjbXsRqWg8nivYnui  169.254.169.254  169.254.169.254  HTTP  text/json  333  333
+```
+
+> **Speaker Script:**  
+> *"Finally in `files.log`, Zeek's File Analysis Framework isolates the transferred payload stream itself. We see File UID `F5tAayNZgmQVae3Ed` tied directly to our connection UID, with MIME type `text/json` and exactly 333 bytes—the exact length of the leaked temporary STS session token. This provides wire-speed proof of data exfiltration."*
 
 ---
 
@@ -189,8 +204,8 @@ Open your email or webhook, or explain the alert contents:
 | **Check Alert Log** | `zeek-cut ts uid note msg < logs/notice.log` |
 | **Check HTTP Log** | `zeek-cut uid method host uri status_code < logs/http.log` |
 | **Check Conn Log** | `zeek-cut uid id.orig_h id.resp_h id.resp_p proto < logs/conn.log` |
+| **Check Files Log** | `zeek-cut fuid uid id.orig_h id.resp_h source mime_type seen_bytes total_bytes < logs/files.log` |
 | **Plant Decoy Key** | `./canary/plant_canary.sh <ACCESS_KEY> <SECRET_KEY>` |
 | **Trigger Decoy Key** | `./canary/trigger_canary.sh` |
-| **Web Console (Optional)** | `python3 -m http.server 3000 --directory dashboard` &rarr; `http://localhost:3000` |
 
 

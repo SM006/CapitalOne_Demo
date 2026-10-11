@@ -84,10 +84,6 @@ This lab proves that deploying two defense-in-depth controls provides instantane
 ├── canary/                  # Thinkst Canarytoken deception tools
 │   ├── plant_canary.sh      # Plant decoy AWS keys into ~/.aws/credentials
 │   └── trigger_canary.sh    # Simulate attacker reconnaissance (aws sts)
-├── dashboard/               # Minimalist Apple-inspired SOC operations console
-│   ├── index.html
-│   ├── style.css
-│   └── app.js
 └── logs/                    # Reference Zeek logs from simulation (conn, http, notice)
 ```
 
@@ -134,29 +130,7 @@ Runs in an isolated container without requiring root configuration or tool insta
 docker run --rm --cap-add=NET_ADMIN -v "$(pwd):/demo" capitalone-zeek-demo /demo/run_simulation.sh
 ```
 
----
 
-### Option D: Web Operations Console
-
-
----
-
-### Option C: Web Operations Console
-
-An interactive, Apple-inspired Security Operations Console is included in `dashboard/`:
-
-```bash
-# Start local dashboard server:
-python3 -m http.server 3000 --directory dashboard
-```
-
-Open **[http://localhost:3000](http://localhost:3000)** in your browser to inspect:
-- Interactive attack topology with live packet flow animation.
-- Tabular log viewer (`notice.log`, `http.log`, `conn.log`) with live text search.
-- One-click connection UID cross-highlighting across network layers.
-- Interactive Canarytoken probe simulator with raw CloudTrail JSON rendering.
-
----
 
 ## 5. Part 1: Zeek Network Security Monitoring
 
@@ -202,15 +176,25 @@ event http_request(c: connection, method: string, original_URI: string,
 1790672629.480405          CCHznt2GFsuQhsfvsk SSRF::Metadata_Access  Possible SSRF: AWS EC2 metadata service accessed by 169.254.169.254
 ```
 
+#### 3. File Payload Extraction (`files.log`)
+```text
+#fields fuid               uid                id.orig_h        id.resp_h        source mime_type seen_bytes total_bytes
+F5tAayNZgmQVae3Ed          CjbXsRqWg8nivYnui  169.254.169.254  169.254.169.254  HTTP   text/json 333        333
+F6omD51CXSFfpgzRxk          CINDfJ27E2fRaKJzVf 127.0.0.1        127.0.0.1        HTTP   text/json 333        333
+FJ3vE83RSSTMnKzJ55          CCHznt2GFsuQhsfvsk 169.254.169.254  169.254.169.254  HTTP   text/json 290        290
+FQ4rxE4vg637v2sc53          C1AKQ61lPHgHJ1WiQg 127.0.0.1        127.0.0.1        HTTP   text/json 290        290
+```
+
 ### Cross-Log UID Correlation
 
-Every connection in Zeek receives a globally unique session identifier (`uid`). In our simulation, UID **`CjbXsRqWg8nivYnui`** binds all three layers together deterministically:
+Every connection in Zeek receives a globally unique session identifier (`uid`). In our simulation, UID **`CjbXsRqWg8nivYnui`** binds all four layers together deterministically:
 
 ```text
 Correlation Key (UID): CjbXsRqWg8nivYnui
   ├── [notice.log] Alert: SSRF::Metadata_Access (Dest: 169.254.169.254)
   ├── [http.log]   Payload: GET /latest/meta-data/iam/security-credentials/... (Status: 200 OK)
-  └── [conn.log]   Transport: 169.254.169.254:46748 -> 169.254.169.254:80 (TCP, 191 bytes sent, 478 bytes recv)
+  ├── [conn.log]   Transport: 169.254.169.254:46748 -> 169.254.169.254:80 (TCP, 191 bytes sent, 478 bytes recv)
+  └── [files.log]  Payload: FUID F5tAayNZgmQVae3Ed (text/json, 333 bytes STS keys exfiltrated)
 ```
 
 > **Incident Response Takeaway:**  
