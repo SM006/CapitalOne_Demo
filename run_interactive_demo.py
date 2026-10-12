@@ -220,6 +220,11 @@ def main():
             if os.geteuid() == 0:
                 zeek_cmd_args = [zeek_executable, "-C", "-i", iface, zeek_script_path]
             else:
+                # Refresh sudo timestamp interactively in the terminal before spawning
+                try:
+                    subprocess.run(["sudo", "-v"], check=True)
+                except Exception:
+                    pass
                 zeek_cmd_args = ["sudo", zeek_executable, "-C", "-i", iface, zeek_script_path]
 
             zeek_proc = subprocess.Popen(
@@ -227,8 +232,7 @@ def main():
                 cwd=log_dir,
                 stdin=subprocess.DEVNULL,
                 stdout=zeek_log,
-                stderr=zeek_log,
-                start_new_session=True
+                stderr=zeek_log
             )
             background_procs.append((zeek_proc, "zeek"))
             time.sleep(2)
@@ -350,10 +354,11 @@ def main():
     step += 1
     canary_cmd = "grep -A 4 '\\[canary\\]' ~/.aws/credentials"
     desc = "Checks planted decoy AWS honeytoken keys stored in ~/.aws/credentials."
-    
     if prompt_step(step, total_steps, "Inspect Planted Decoy Canary Credentials", desc, canary_cmd):
-        if os.path.exists(os.path.expanduser("~/.aws/credentials")):
-            subprocess.run(canary_cmd, shell=True)
+        real_user = os.environ.get("SUDO_USER")
+        aws_creds_path = os.path.expanduser(f"~{real_user}/.aws/credentials") if real_user else os.path.expanduser("~/.aws/credentials")
+        if os.path.exists(aws_creds_path):
+            subprocess.run(f"grep -A 4 '\\[canary\\]' '{aws_creds_path}'", shell=True)
         else:
             print("Planted profile in ~/.aws/credentials:")
             print("[canary]")
@@ -369,8 +374,13 @@ def main():
     
     if prompt_step(step, total_steps, "Trigger Canarytoken Reconnaissance Alert", desc, trigger_cmd):
         trigger_path = os.path.join(base_dir, "canary", "trigger_canary.sh")
-        if os.path.exists(trigger_path) and os.path.exists(os.path.expanduser("~/.aws/credentials")):
-            subprocess.run(trigger_path, shell=True)
+        real_user = os.environ.get("SUDO_USER")
+        aws_creds_path = os.path.expanduser(f"~{real_user}/.aws/credentials") if real_user else os.path.expanduser("~/.aws/credentials")
+        if os.path.exists(trigger_path) and os.path.exists(aws_creds_path):
+            if real_user:
+                subprocess.run(f"sudo -u {real_user} '{trigger_path}'", shell=True)
+            else:
+                subprocess.run(trigger_path, shell=True)
         else:
             print("[*] Simulating attacker reconnaissance command: aws sts get-caller-identity --profile canary")
             print("{\n  \"UserId\": \"AIDATU7L4S6W5LRX4CBJF\",\n  \"Account\": \"251213420461\",\n  \"Arn\": \"arn:aws:iam::251213420461:user/security-canary-decoy\"\n}")
